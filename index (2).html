@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>云岭风物志 · 十一城记</title>
+    <!-- 微信JSSDK (演示环境中用于模拟获取用户信息，实际需后端签名) -->
+    <script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
+    <!-- html2canvas 用于留影功能 -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: #2c241a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'PingFang SC', 'Hiragino Sans', 'Microsoft YaHei', system-ui, -apple-system, 'Segoe UI', Roboto, 'Notre Dame', serif;
+        }
+
+        /* ---- 秘境启程 (自定义加载界面) ---- */
+        #loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(145deg, #2c5a2e 0%, #1a3a1a 100%);
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #fff3cf;
+            transition: opacity 0.7s ease;
+        }
+        .load-ornament {
+            text-align: center;
+            animation: gentleDrift 2.2s infinite ease;
+        }
+        .load-ornament svg {
+            width: 80px;
+            height: 80px;
+            filter: drop-shadow(0 6px 12px rgba(0,0,0,0.4));
+        }
+        .loading-title {
+            margin-top: 24px;
+            font-size: 1.8rem;
+            letter-spacing: 3px;
+            font-weight: 500;
+            background: radial-gradient(circle, #ffdfa5, #ffbc6e);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .loading-bar {
+            width: 220px;
+            height: 6px;
+            background: rgba(255,245,180,0.4);
+            border-radius: 8px;
+            margin-top: 24px;
+            overflow: hidden;
+        }
+        .bar-fill {
+            width: 0%;
+            height: 100%;
+            background: #ffbc6e;
+            border-radius: 8px;
+            transition: width 0.3s;
+        }
+        @keyframes gentleDrift {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(2deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+
+        /* 主舞台容器 */
+        #city-stage {
+            width: 100vw;
+            max-width: 450px;
+            height: 700px;
+            background: #fef3e2;
+            border-radius: 40px;
+            box-shadow: 0 25px 45px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+            margin: 16px auto;
+        }
+
+        /* 页面 */
+        .city-page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-size: cover;
+            background-position: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.5s cubic-bezier(0.2, 0.9, 0.4, 1.1), visibility 0.5s;
+            overflow-y: auto;
+            padding: 20px 20px 80px;
+            border-radius: 40px;
+        }
+        .city-page.active {
+            opacity: 1;
+            visibility: visible;
+            z-index: 10;
+        }
+
+        .card {
+            background: rgba(255,250,235,0.94);
+            backdrop-filter: blur(5px);
+            border-radius: 36px;
+            padding: 22px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+            border: 1px solid rgba(255,210,120,0.6);
+        }
+
+        h2 {
+            color: #b45f2b;
+            font-size: 1.8rem;
+            border-left: 8px solid #f0a34b;
+            padding-left: 18px;
+            margin-bottom: 14px;
+        }
+
+        .button-cluster {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+        button {
+            background: #c5712c;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 60px;
+            color: white;
+            font-weight: bold;
+            font-size: 0.9rem;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+            transition: 0.15s;
+            cursor: pointer;
+        }
+        button:active { transform: scale(0.96); background: #9f551f;}
+
+        canvas, .drawing-pad {
+            background: #fff5e8;
+            border-radius: 28px;
+            margin: 12px 0;
+            box-shadow: inset 0 0 0 2px #ffe1aa, 0 5px 12px rgba(0,0,0,0.1);
+        }
+
+        /* 孔雀灵 · 元件起舞 (预置/元件动画) */
+        .peacock-dancer {
+            width: 100px;
+            height: 100px;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="40" r="20" fill="%2339825e"/><path d="M50 55 L30 85 L70 85 Z" fill="%23265f44"/><circle cx="38" cy="38" r="3" fill="white"/><circle cx="62" cy="38" r="3" fill="white"/><path d="M50 70 L40 95 L60 95 Z" fill="%23f0b24b"/><polygon points="50,20 70,10 60,28" fill="%23ffcf5c"/><polygon points="50,20 30,10 40,28" fill="%23ffcf5c"/></svg>') no-repeat center/contain;
+            animation: peafowlSway 1.2s infinite alternate ease-in-out;
+            filter: drop-shadow(0 5px 10px rgba(0,0,0,0.2));
+        }
+        @keyframes peafowlSway {
+            0% { transform: rotate(0deg) scale(1); }
+            100% { transform: rotate(5deg) scale(1.05); }
+        }
+
+        /* 东巴经卷 · 灵辉流动 (遮罩叙事) */
+        .mask-relic {
+            position: relative;
+            width: 100%;
+            height: 140px;
+            background: #e2cfaa;
+            border-radius: 28px;
+            overflow: hidden;
+        }
+        .flow-pattern {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140"><rect width="200" height="140" fill="%23f7e8c8"/><text x="20" y="65" font-size="22" fill="%238c4713">✨ 天赐吉祥</text><text x="30" y="110" font-size="16" fill="%23a5531a">东巴文 · 福运永续</text></svg>') ;
+            background-size: cover;
+            -webkit-mask: linear-gradient(90deg, transparent 0%, #000 50%, transparent 100%);
+            mask: linear-gradient(90deg, transparent 0%, #000 55%, transparent 100%);
+            animation: shimmerReveal 3s infinite alternate;
+        }
+        @keyframes shimmerReveal {
+            0% { mask-position: 0% 0%; -webkit-mask-position: 0% 0%;}
+            100% { mask-position: 100% 0%; -webkit-mask-position: 100% 0%;}
+        }
+
+        /* 火把燃情 · 进度心意 */
+        .flame-ritual {
+            width: 100%;
+            height: 8px;
+            background: #ecdbba;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .flame-grow {
+            width: 0%;
+            height: 100%;
+            background: #e6642e;
+            border-radius: 6px;
+            transition: width 2s cubic-bezier(0.22, 0.97, 0.36, 1);
+        }
+
+        /* 投票卡片 */
+        .choice-card {
+            background: #f2e7d2;
+            margin: 10px 0;
+            padding: 12px 18px;
+            border-radius: 50px;
+            display: flex;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: 0.1s;
+        }
+
+        /* 旅人信息 */
+        .fellow-traveler {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        #avatar-portrait {
+            width: 50px;
+            height: 50px;
+            border-radius: 100px;
+            object-fit: cover;
+            border: 2px solid #ffbc6e;
+        }
+        canvas.doodle-field {
+            width: 100%;
+            height: 180px;
+            background: #fffcf3;
+            touch-action: none;
+        }
+        .city-tip {
+            text-align: center;
+            font-size: 12px;
+            color: #b87a3c;
+            margin-top: 18px;
+        }
+    </style>
+</head>
+<body>
+<div id="loading-screen">
+    <div class="load-ornament">
+        <svg viewBox="0 0 100 100"><path fill="#ffdfa0" d="M50,15 L72,38 L63,62 L50,78 L37,62 L28,38 Z" stroke="#b4622a" stroke-width="2"/><circle cx="50" cy="48" r="7" fill="#eb7a2e"/></svg>
+        <div class="loading-title">云岭·十一城</div>
+        <div class="loading-bar"><div class="bar-fill" id="progressDynamic"></div></div>
+        <div style="margin-top: 12px;">唤醒高原风物...</div>
+    </div>
+</div>
+<div id="city-stage"></div>
+
+<script>
+    // ---------- 云南十一座城市，每一城一种独特风韵 ----------
+    const cities = [
+        { id:0, name:"昆明·春城花海", desc: "四季看花花不老，一江春月是昆明", style:"welcome", bg:"#fff3e0" },
+        { id:1, name:"大理·风花雪月", desc:"苍山洱海，白族扎染", type:"danceCharm" },
+        { id:2, name:"丽江·柔软时光", desc:"纳西古乐，东巴秘境", type:"maskHeritage" },
+        { id:3, name:"西双版纳·雨林孔雀", desc:"傣家竹楼，吉祥灵鸟", type:"flameProgress" },   // 复用进度样式做"雨林热情"
+        { id:4, name:"红河·梯田守望", desc:"哈尼农耕，大地雕塑", type:"voteFolk" },
+        { id:5, name:"迪庆·净地香格里拉", desc:"心中的日月，藏家祝福", type:"meetCompanion" },
+        { id:6, name:"楚雄·彝人火歌", desc:"左脚舞与火把节", type:"memoirShoot" },
+        { id:7, name:"玉溪·抚仙湖畔", desc:"古滇青铜, 花灯悠扬", type:"artSketch" },
+        { id:8, name:"保山·翡翠之府", desc:"高黎贡山，咖啡醇香", type:"sceneChanger" },
+        { id:9, name:"普洱·茶源古道", desc:"千年茶山，马帮铃响", type:"stageWhisper" },
+        { id:10, name:"德宏·黎明之城", desc:"胞波情谊，金塔映日", type:"finaleBless" }
+    ];
+
+    let currentCityIdx = 0;
+    const pagesTotal = 11;
+    let mainStage = document.getElementById('city-stage');
+    let loaderDiv = document.getElementById('loading-screen');
+    let progressFill = document.getElementById('progressDynamic');
+    let loadPercent = 0;
+    let loadTimer = setInterval(()=>{
+        loadPercent += Math.random() * 20;
+        if(loadPercent >= 100){
+            loadPercent = 100;
+            clearInterval(loadTimer);
+            setTimeout(()=>{
+                loaderDiv.style.opacity = "0";
+                setTimeout(()=>{ loaderDiv.style.display = "none"; }, 700);
+                buildWorld();
+            }, 300);
+        }
+        progressFill.style.width = loadPercent + "%";
+    }, 130);
+
+    // 全局数据
+    let voteResults = { "哈尼四季生产调":0, "建水紫陶":0, "彝族海菜腔":0 };
+    let wandererInfo = { nickname: "远方旅人", avatar: "https://via.placeholder.com/100/c4956a?text=Yun" };
+    let pictureIndex = 0;
+    const galleryImgs = ["https://picsum.photos/id/96/300/200", "https://picsum.photos/id/43/300/200", "https://picsum.photos/id/353/300/200"];
+
+    function buildWorld() {
+        mainStage.innerHTML = '';
+        cities.forEach((city, idx) => {
+            let pageDiv = document.createElement('div');
+            pageDiv.className = 'city-page';
+            pageDiv.id = `page-${idx}`;
+            pageDiv.style.backgroundColor = city.bg || "#fef7e8";
+            pageDiv.innerHTML = generateCityContent(city, idx);
+            mainStage.appendChild(pageDiv);
+        });
+        goToCity(0);
+    }
+
+    function generateCityContent(city, idx) {
+        if (city.style === "welcome") {
+            return `<div class="card"><h2>🌸 ${city.name}</h2><p style="font-size:1.2rem">${city.desc}</p><div class="peacock-dancer" style="margin:20px auto; width:110px; height:110px;"></div><p>十一座城，十一缕山风。轻抚画卷，开启心旅。</p><button class="nextCity" data-next="1">启程 · 向风而行 →</button></div>`;
+        }
+        else if (city.type === "danceCharm") {
+            return `<div class="card"><h2>🕊️ ${city.name}</h2><div class="peacock-dancer" id="danceBird" style="margin:0 auto 20px;"></div><p>白族霸王鞭与孔雀灵韵交织。轻触灵羽，霎时展翼。</p><button id="transformMove">✨ 绽放翎羽 ✨</button><button class="nextCity" data-next="${idx+1}">行至下一城</button></div>`;
+        }
+        else if (city.type === "maskHeritage") {
+            return `<div class="card"><h2>📜 ${city.name}</h2><div class="mask-relic"><div class="flow-pattern"></div></div><p>东巴经文字如云烟流转，纳西智者守护千年秘语。</p><button class="nextCity" data-next="${idx+1}">继续穿行</button></div>`;
+        }
+        else if (city.type === "flameProgress") {
+            return `<div class="card"><h2>🌴 ${city.name}</h2><div class="flame-ritual"><div class="flame-grow" id="growFire"></div></div><p>雨林之魂，泼水祝福的热忱，一点一点传递。</p><button id="kindleFire">绽放雨林热情</button><button class="nextCity" data-next="${idx+1}">下一城</button></div>`;
+        }
+        else if (city.type === "voteFolk") {
+            let voteHtml = `<div class="card"><h2>🌾 ${city.name}</h2><p>哈尼梯田上的歌谣，哪一项技艺最让您倾心？</p>`;
+            for (let [item, count] of Object.entries(voteResults)) {
+                voteHtml += `<div class="choice-card" data-voteitem="${item}">🎋 ${item}  <span>❤️ ${count} 份青睐</span></div>`;
+            }
+            voteHtml += `<p id="voteMessage" style="margin-top:8px"></p><button class="nextCity" data-next="${idx+1}">继续游历</button></div>`;
+            return voteHtml;
+        }
+        else if (city.type === "meetCompanion") {
+            return `<div class="card"><h2>🏔️ ${city.name}</h2><div class="fellow-traveler" id="friendDisplay"><img id="avatar-portrait" src="${wandererInfo.avatar}"><span id="displayName">${wandererInfo.nickname}</span></div><button id="getTravelBuddy">✨ 结识同路行者 ✨</button><p style="font-size:12px">在香巴拉结一份善缘</p><button class="nextCity" data-next="${idx+1}">继续前行</button></div>`;
+        }
+        else if (city.type === "memoirShoot") {
+            return `<div class="card"><h2>📸 ${city.name}</h2><p>将此刻的彝家风情与火把热情留驻心间。</p><button id="snapMemory">📷 留住时光影</button><div id="memoryCanvasArea" style="margin:15px 0;"><canvas id="snapPreview" style="width:100%; border-radius:20px;"></canvas></div><button class="nextCity" data-next="${idx+1}">下一城</button></div>`;
+        }
+        else if (city.type === "artSketch") {
+            return `<div class="card"><h2>🎨 ${city.name}</h2><canvas id="drawCanvas" class="doodle-field" width="300" height="180" style="width:100%; height:180px; touch-action: none;"></canvas><div class="button-cluster"><button id="clearDraw">清空画纸</button><button id="keepDraw">珍藏手迹</button></div><button class="nextCity" data-next="${idx+1}">前往茶香之地</button></div>`;
+        }
+        else if (city.type === "sceneChanger") {
+            return `<div class="card"><h2>🍃 ${city.name}</h2><img id="changingImg" src="${galleryImgs[0]}" style="width:100%; border-radius:28px; margin:12px 0;"><div class="button-cluster"><button id="prevImage">🌄 上一景</button><button id="nextImage">下一景 🌅</button></div><button class="nextCity" data-next="${idx+1}">继续漫游</button></div>`;
+        }
+        else if (city.type === "stageWhisper") {
+            return `<div class="card"><h2>🍵 ${city.name}</h2><div class="peacock-dancer" id="controlBird" style="margin:0 auto;"></div><div class="button-cluster"><button id="pauseBird">静赏</button><button id="resumeBird">轻舞</button><button id="changeHue">染一抹暮色</button></div><button class="nextCity" data-next="${idx+1}">尾声·瑞丽江畔</button></div>`;
+        }
+        else if (city.type === "finaleBless") {
+            return `<div class="card"><h2>🌺 ${city.name}</h2><p>十一城的风, 吹拂过金塔与竹桥。云南永远守候你的归来。愿如大盈江水，长流不息。</p><button id="rejourney">🔄 重走云岭之路</button></div>`;
+        }
+        return `<div class="card">秘境加载中</div>`;
+    }
+
+    function goToCity(index) {
+        if (index < 0) index = 0;
+        if (index >= pagesTotal) index = pagesTotal - 1;
+        document.querySelectorAll('.city-page').forEach((pg, i) => {
+            if (i === index) pg.classList.add('active');
+            else pg.classList.remove('active');
+        });
+        currentCityIdx = index;
+        bindCityEvents(currentCityIdx);
+        const cityType = cities[currentCityIdx]?.type;
+        if (cityType === "danceCharm") attachDanceEffect();
+        if (cityType === "flameProgress") attachFlameEffect();
+        if (cityType === "meetCompanion") attachWechatMock();
+        if (cityType === "memoirShoot") attachSnapshot();
+        if (cityType === "artSketch") attachDrawingPad();
+        if (cityType === "sceneChanger") attachGallerySwitcher();
+        if (cityType === "stageWhisper") attachStageController();
+        if (cityType === "voteFolk") attachVoteHandler();
+        if (cityType === "finaleBless") attachRestartJourney();
+    }
+
+    function bindCityEvents(idx) {
+        document.querySelectorAll(`#page-${idx} .nextCity`).forEach(btn => {
+            btn.removeEventListener('click', nextNav);
+            btn.addEventListener('click', nextNav);
+        });
+        function nextNav(e) {
+            let nextIdx = parseInt(e.currentTarget.getAttribute('data-next'));
+            if (!isNaN(nextIdx)) goToCity(nextIdx);
+        }
+    }
+
+    // 变形动画 & 预置关键帧已存在
+    function attachDanceEffect() {
+        let magicBtn = document.getElementById('transformMove');
+        let bird = document.getElementById('danceBird');
+        if (magicBtn && bird) {
+            magicBtn.onclick = () => {
+                bird.style.transform = "scale(1.35) rotate(9deg)";
+                bird.style.transition = "0.2s";
+                setTimeout(() => { bird.style.transform = ""; }, 400);
+            };
+        }
+    }
+
+    function attachFlameEffect() {
+        let fireBtn = document.getElementById('kindleFire');
+        let fireElem = document.getElementById('growFire');
+        if (fireBtn && fireElem) {
+            fireBtn.onclick = () => {
+                fireElem.style.width = '100%';
+                setTimeout(() => { fireElem.style.width = '0%'; }, 2500);
+            };
+        }
+    }
+
+    function attachWechatMock() {
+        let meet = document.getElementById('getTravelBuddy');
+        if (meet) {
+            meet.onclick = () => {
+                wandererInfo.nickname = "香格里拉·卓玛";
+                wandererInfo.avatar = "https://randomuser.me/api/portraits/women/45.jpg";
+                document.getElementById('avatar-portrait').src = wandererInfo.avatar;
+                document.getElementById('displayName').innerText = wandererInfo.nickname;
+            };
+        }
+    }
+
+    function attachSnapshot() {
+        let snapBtn = document.getElementById('snapMemory');
+        if (snapBtn) {
+            snapBtn.onclick = () => {
+                html2canvas(document.getElementById('city-stage'), { scale: 2, backgroundColor: null }).then(canvas => {
+                    let previewCanvas = document.getElementById('snapPreview');
+                    previewCanvas.width = 300; previewCanvas.height = 500;
+                    let ctxPrev = previewCanvas.getContext('2d');
+                    ctxPrev.drawImage(canvas, 0, 0, 300, 500);
+                    alert("时光剪影已存留，长按可珍藏");
+                }).catch(()=> alert("再试一次留影"));
+            };
+        }
+    }
+
+    function attachDrawingPad() {
+        let canvas = document.getElementById('drawCanvas');
+        if (!canvas) return;
+        canvas.width = 300; canvas.height = 180;
+        let ctx = canvas.getContext('2d');
+        ctx.fillStyle = "#fffcf3";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        let drawing = false;
+        function getCoord(e) {
+            let rect = canvas.getBoundingClientRect();
+            let scaleX = canvas.width / rect.width;
+            let scaleY = canvas.height / rect.height;
+            let clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            let clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            let x = (clientX - rect.left) * scaleX;
+            let y = (clientY - rect.top) * scaleY;
+            return { x: Math.min(Math.max(x,0),canvas.width), y: Math.min(Math.max(y,0),canvas.height) };
+        }
+        function drawPoint(e) {
+            if (!drawing) return;
+            let { x, y } = getCoord(e);
+            ctx.fillStyle = "#b46f34";
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        canvas.addEventListener('mousedown', (e) => { drawing = true; drawPoint(e); });
+        window.addEventListener('mouseup', () => drawing = false);
+        canvas.addEventListener('mousemove', drawPoint);
+        canvas.addEventListener('touchstart', (e) => { drawing = true; drawPoint(e); e.preventDefault(); });
+        canvas.addEventListener('touchmove', (e) => { drawPoint(e); e.preventDefault(); });
+        canvas.addEventListener('touchend', () => drawing = false);
+        document.getElementById('clearDraw')?.addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#fffcf3";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        });
+        document.getElementById('keepDraw')?.addEventListener('click', () => alert("你的画作已记入旅行手账"));
+    }
+
+    function attachGallerySwitcher() {
+        let img = document.getElementById('changingImg');
+        let prev = document.getElementById('prevImage');
+        let next = document.getElementById('nextImage');
+        if (img) {
+            prev.onclick = () => { pictureIndex = (pictureIndex - 1 + galleryImgs.length) % galleryImgs.length; img.src = galleryImgs[pictureIndex]; };
+            next.onclick = () => { pictureIndex = (pictureIndex + 1) % galleryImgs.length; img.src = galleryImgs[pictureIndex]; };
+        }
+    }
+
+    function attachStageController() {
+        let birdCtrl = document.getElementById('controlBird');
+        let pauseBtn = document.getElementById('pauseBird');
+        let resumeBtn = document.getElementById('resumeBird');
+        if (birdCtrl) {
+            pauseBtn.onclick = () => { birdCtrl.style.animationPlayState = 'paused'; };
+            resumeBtn.onclick = () => { birdCtrl.style.animationPlayState = 'running'; };
+        }
+        let hueBtn = document.getElementById('changeHue');
+        if (hueBtn) {
+            hueBtn.onclick = () => {
+                let currentPage = document.getElementById(`page-${currentCityIdx}`);
+                currentPage.style.backgroundColor = `#${Math.floor(Math.random() * 16777215).toString(16)}`;
+            };
+        }
+    }
+
+    function attachVoteHandler() {
+        let voteOptions = document.querySelectorAll('.choice-card');
+        let voteMsg = document.getElementById('voteMessage');
+        voteOptions.forEach(opt => {
+            opt.onclick = () => {
+                let key = opt.getAttribute('data-voteitem');
+                if (voteResults[key] !== undefined) voteResults[key]++;
+                if (voteMsg) voteMsg.innerText = `✨ 感谢您欣赏「${key}」，现已获得 ${voteResults[key]} 份喜爱 ✨`;
+                let span = opt.querySelector('span');
+                if (span) span.innerText = `❤️ ${voteResults[key]} 份青睐`;
+            };
+        });
+    }
+
+    function attachRestartJourney() {
+        let restartBtn = document.getElementById('rejourney');
+        if (restartBtn) restartBtn.onclick = () => goToCity(0);
+    }
+
+    // 全局确保遮罩动画，元件动画即孔雀舞已生效，进度动画点火，自定义表单已满足（留言通过寄明信片风格，但自定义表单实际上在页面设计内未单独做？由于需求页面已经实现了投票、自定义表单？ —— 在需求中自定义表单要有，本结构中第5页红河是投票，自定义表单可以额外在某一页实现，鉴于总共11页，但未明确页面配额，再加入一个自定义表单会超出？我们可以将meetCompanion扩展一个旅行心愿卡：在迪庆页增加一个表单，但为了不与现有设计冲突，我们可以巧妙增加一个隐藏表单？但最好直接增加一个独立的"心愿驿站"，但一共已经11个城市，就利用迪庆页再增加一个留言表单？为了保证完整性，我将在迪庆(meetCompanion)页下方附加一个简单的留言区域，且不增加额外页面。 修改meetCompanion生成函数，加入'旅途寄语'输入框。这样既没有超出11页，又实现了自定义表单。并且不使用技术名词。-->
+    // 重新定义meetCompanion的内容，增加一个心愿表单字段
+    // 覆盖原来的 generateCityContent 中的 meetCompanion 部分
+    generateCityContent = (function(originalFn) {
+        return function(city, idx) {
+            if (city.type === "meetCompanion") {
+                return `<div class="card"><h2>🏔️ ${city.name}</h2><div class="fellow-traveler" id="friendDisplay"><img id="avatar-portrait" src="${wandererInfo.avatar}"><span id="displayName">${wandererInfo.nickname}</span></div><button id="getTravelBuddy">✨ 结识同路行者 ✨</button><div style="margin:16px 0;"><textarea id="wishToLand" rows="2" placeholder="留下您对香巴拉的祝愿..." style="width:100%; border-radius:28px; padding:12px; border:1px solid #ecc897;"></textarea><button id="postWishBtn" style="margin-top:8px;">寄出祈愿</button><p id="feedbackWish" style="margin-top:6px;"></p></div><p style="font-size:12px">在雪山下结缘，留下美好心声</p><button class="nextCity" data-next="${idx+1}">继续前行</button></div>`;
+            }
+            return originalFn(city, idx);
+        };
+    })(generateCityContent);
+
+    // 在attachWechatMock中同时绑定表单提交
+    window.attachWechatMock = attachWechatMock;
+    function superAttach() {
+        attachWechatMock();
+        let postBtn = document.getElementById('postWishBtn');
+        if (postBtn) {
+            postBtn.onclick = () => {
+                let wish = document.getElementById('wishToLand')?.value;
+                let feedback = document.getElementById('feedbackWish');
+                if(feedback) feedback.innerText = wish ? `✨ 福愿已随风飘向梅里雪山：“${wish}” ✨` : "请写下您的祝福～";
+            };
+        }
+    }
+    // 覆盖绑定
+    const originalBind = bindCityEvents;
+    function newBind(idx) {
+        originalBind(idx);
+        if(cities[idx]?.type === "meetCompanion") {
+            setTimeout(()=>{
+                let meetBtn = document.getElementById('getTravelBuddy');
+                if(meetBtn) meetBtn.onclick = () => {
+                    wandererInfo.nickname = "香巴拉·格桑";
+                    wandererInfo.avatar = "https://randomuser.me/api/portraits/men/25.jpg";
+                    document.getElementById('avatar-portrait').src = wandererInfo.avatar;
+                    document.getElementById('displayName').innerText = wandererInfo.nickname;
+                };
+                let wishBtn = document.getElementById('postWishBtn');
+                if(wishBtn) {
+                    wishBtn.onclick = () => {
+                        let wish = document.getElementById('wishToLand')?.value;
+                        let feed = document.getElementById('feedbackWish');
+                        if(feed) feed.innerText = wish ? `✨ 祈愿寄往净土：“${wish}” ✨` : "请写下对雪域的祝福~";
+                    };
+                }
+            },20);
+        }
+    }
+    window.bindCityEvents = newBind;
+    // 最后重新执行一次构建世界绑定
+    // 避免冲突，重新声明函数引用
+    window.generateCityContent = generateCityContent;
+    window.bindCityEvents = newBind;
+    // 重新构建？由于此时已经调用过buildWorld，我们需重新绑定全局方法且重新加载事件。在buildWorld之前函数已替换, 但须确保使用的函数为最新
+    // 上面已经修改函数，但buildWorld已经调用之前定义过？由于脚本是顺序执行，故在buildWorld之前已经重新定义generateCityContent和bindCityEvents，正确。
+</script>
+</body>
+</html>
